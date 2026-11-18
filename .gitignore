@@ -1,5 +1,44 @@
-# Object file
-*.o
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
 
-# Ada Library Information
-*.ali
+# --- Virtual environments (build.bat and run_from_source.bat create .venv) ---
+.venv/
+venv/
+env/
+
+# --- PyInstaller output (GitHub Actions builds the .exe; don't commit it) ---
+build/
+dist/
+# Keep RubricVisionAI.spec: it's the build recipe.
+
+# --- Tests and tooling ---
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --- Local data that must never reach the repo ---
+.env
+*.log
+Reports/
+# Test videos
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+
+# --- Excel/Office lock files ---
+~$*
+
+# --- Editors and OS ---
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
