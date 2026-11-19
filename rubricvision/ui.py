@@ -182,15 +182,25 @@ class Theme:
             lightcolor=WHITE,
             darkcolor=WHITE,
             arrowcolor=TEXT,
+            foreground=TEXT,
+            selectbackground=WHITE,  # a selected readonly combobox must not turn white-on-white
+            selectforeground=TEXT,
             padding=(self.px(8), self.px(4)),
         )
         style.map(
             "TCombobox",
-            fieldbackground=[("readonly", WHITE)],
-            selectbackground=[("readonly", WHITE)],
-            selectforeground=[("readonly", TEXT)],
+            fieldbackground=[("readonly", "focus", WHITE), ("readonly", WHITE), ("!disabled", WHITE)],
+            foreground=[("readonly", "focus", TEXT), ("readonly", TEXT), ("!disabled", TEXT)],
+            selectbackground=[("readonly", "focus", WHITE), ("readonly", WHITE), ("focus", WHITE), ("!focus", WHITE)],
+            selectforeground=[("readonly", "focus", TEXT), ("readonly", TEXT), ("focus", TEXT), ("!focus", TEXT)],
             bordercolor=[("focus", BLUE)],
         )
+        # The drop-down list itself
+        root.option_add("*TCombobox*Listbox.background", WHITE)
+        root.option_add("*TCombobox*Listbox.foreground", TEXT)
+        root.option_add("*TCombobox*Listbox.selectBackground", BLUE)
+        root.option_add("*TCombobox*Listbox.selectForeground", WHITE)
+        root.option_add("*TCombobox*Listbox.font", self.base)
         style.configure(
             "Blue.Horizontal.TProgressbar",
             troughcolor="#E3E7ED",
@@ -731,12 +741,17 @@ class SubmissionsScreen(Screen):
 
     # ------------------------------------------------------------ actions
     def on_model_selected(self, _event=None):
-        label = self.model_var.get()
-        model_id = next(mid for mid, lbl in self.models if lbl == label)
+        label = self.model_box.get() or self.model_var.get()
+        match = [mid for mid, lbl in self.models if lbl == label]
+        if not match:
+            return
+        model_id = match[0]
         self.app.cfg.set_model(model_id)
-        self.model_box.selection_clear()
         self.model_note.configure(text="Checking availability…", fg=FAINT)
-        self.refresh()
+        # Redraw after the drop-down has fully closed (on Windows the field can stay
+        # blank otherwise), and move focus away so the text isn't left selected.
+        self.after_idle(self._settle_model_box)
+        self.after_idle(self.refresh)
         service = self.app.service
 
         def work():
@@ -751,6 +766,14 @@ class SubmissionsScreen(Screen):
                 self.model_note.configure(text="Not available for this API key", fg=AMBER)
 
         self.app.run_in_thread(work, done)
+
+    def _settle_model_box(self):
+        if not self.winfo_exists():
+            return
+        self.model_box.set(self.app.cfg.model_label)
+        self.model_box.selection_clear()
+        self.focus_set()
+        self.model_box.update_idletasks()
 
     def set_accuracy(self, value: str):
         self.app.accuracy = value
