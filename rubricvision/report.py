@@ -6,6 +6,8 @@ runs scripts and doesn't load anything from the internet.
 
 from __future__ import annotations
 
+import json
+import logging
 import re
 import threading
 import unicodedata
@@ -16,6 +18,8 @@ from . import APP_NAME, COPYRIGHT
 from .grading import STATUS_LABELS_ES, SubmissionResult
 from .prompt import STATUSES
 from .rubric import format_mmss
+
+log = logging.getLogger(__name__)
 
 STATUS_STYLE = {
     # background, text color, icon
@@ -112,6 +116,55 @@ def safe_file_stem(name: str) -> str:
     stem = "".join(c for c in stem if not unicodedata.combining(c))
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._-")
     return (stem or "entrega")[:80]
+
+
+DATA_BLOCK_ID = "rubricvision-data"
+DATA_VERSION = 1
+
+
+def report_data(result: SubmissionResult, min_height: int = 720) -> dict:
+    """Everything the report shows, as plain data (embedded in the HTML)."""
+    sub = result.submission
+    return {
+        "version": DATA_VERSION,
+        "video": sub.display_name,
+        "source": sub.source if sub.is_youtube else Path(sub.source).name,
+        "is_youtube": sub.is_youtube,
+        "youtube_id": sub.youtube_id,
+        "graded_at": result.graded_at.isoformat(timespec="seconds"),
+        "model": result.model_label,
+        "accuracy": result.accuracy,
+        "duration_s": round(result.duration_s) if result.duration_s else None,
+        "max_duration_s": result.rubric.max_duration_s,
+        "over_limit": result.over_limit(),
+        "resolution": None if sub.is_youtube else sub.resolution_label,
+        "low_resolution": sub.is_low_resolution(min_height),
+        "narration_lang": result.narration_lang,
+        "ui_lang": result.ui_lang,
+        "rubric_file": result.rubric.file_name,
+        "cost_usd": round(result.cost_usd, 4),
+        "illegible": [{"from_s": a, "to_s": b, "note": n} for a, b, n in result.illegible],
+        "items": [
+            {
+                "requirement_id": r.requirement.id,
+                "requirement": r.requirement.name,
+                "profile": r.requirement.profile,
+                "item_id": r.item.id,
+                "item": r.item.text,
+                "status": r.status,
+                "evidences": [{"seconds": e.seconds, "text": e.text} for e in r.evidences],
+                "missing": r.missing,
+                "note": r.note,
+            }
+            for r in result.items
+        ],
+    }
+
+
+def _data_block(data: dict) -> str:
+    # Every "<" is written as \u003c so text from the model can never open or close a tag.
+    payload = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
+    return f'<script type="application/json" id="{DATA_BLOCK_ID}">{payload}</script>'
 
 
 def build_html(result: SubmissionResult, min_height: int = 720) -> str:
@@ -219,6 +272,7 @@ def build_html(result: SubmissionResult, min_height: int = 720) -> str:
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
 <title>Reporte de corrección — {escape(title)}</title>
 <style>{CSS}</style>
+{_data_block(report_data(result, min_height))}
 </head>
 <body>
 <div class="wrap">
@@ -245,14 +299,54 @@ def build_html(result: SubmissionResult, min_height: int = 720) -> str:
 _write_lock = threading.Lock()
 
 
+def video_identity(data: dict) -> tuple[str, str] | None:
+    """What makes two reports "the same video": file name, or YouTube video id."""
+    if data.get("is_youtube"):
+        vid = data.get("youtube_id")
+        if not vid:
+            from .media import parse_youtube_id
+
+            vid = parse_youtube_id(str(data.get("source") or ""))
+        return ("youtube", vid) if vid else None
+    name = str(data.get("source") or data.get("video") or "").strip()
+    return ("file", Path(name).name.lower()) if name else None
+
+
+def _identity_of(result: SubmissionResult) -> tuple[str, str] | None:
+    sub = result.submission
+    if sub.is_youtube:
+        return ("youtube", sub.youtube_id) if sub.youtube_id else None
+    return ("file", Path(sub.source).name.lower())
+
+
+def _remove_previous(out_dir: Path, identity: tuple[str, str] | None) -> None:
+    """Delete earlier reports (.html + .json) of the same video in this folder."""
+    if identity is None:
+        return
+    from .summary_excel import load_report  # reads both new and older reports
+
+    for old in out_dir.glob("*.html"):
+        data = load_report(old)
+        if not data or video_identity(data) != identity:
+            continue
+        for path in (old, old.with_suffix(".json")):
+            try:
+                path.unlink(missing_ok=True)
+                log.info("Replaced previous report %s", path.name)
+            except OSError as exc:
+                log.warning("Couldn't delete previous report %s: %s", path, exc)
+
+
 def write_report(result: SubmissionResult, out_dir: Path, min_height: int = 720) -> Path:
+    """Write the report. A previous report of the same video in the folder is replaced."""
     html = build_html(result, min_height)
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = safe_file_stem(result.submission.display_name)
     with _write_lock:  # several submissions finish at the same time
+        _remove_previous(out_dir, _identity_of(result))
         path = out_dir / f"{stem}.html"
         n = 2
-        while path.exists():
+        while path.exists():  # a different video with the same name
             path = out_dir / f"{stem}_{n}.html"
             n += 1
         path.write_text(html, encoding="utf-8")

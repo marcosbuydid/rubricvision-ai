@@ -49,6 +49,32 @@ RubricVision AI asks for the key **every time it starts** and **never saves it**
 7. **Results:** *Open report* opens the report in the browser. If something
    fails (video not public, no balance left, no connection), fix it and click
    *Retry*.
+Each submission produces, in the folder you chose, one `.html` report plus a
+`.json` with the model's full answer. If the same video is graded again in the
+same folder (same file name, or same YouTube video), its previous `.html` and
+`.json` are **replaced**, so the folder and the Excel summary always hold the
+latest grading of each submission. A different video that happens to get the
+same report name is kept, with a number added (`group-1_demo_2.html`).
+
+### Excel summary
+
+When you choose the reports folder, the program creates
+**`resumen_correcciones.xlsx`** there with only the column headers (if the file
+doesn't exist yet). Every time a grading session finishes (and after each
+*Retry*), it rebuilds the file from **all** the `.html` reports in that folder,
+including ones from earlier sessions. The
+*Excel summary* button on the results screen rebuilds it and opens it.
+
+| Sheet | Contents |
+|---|---|
+| `Resumen` | One row per submission: video, source, date, model, accuracy, duration, over the limit, resolution, count per status, % Cumple, cost and a link to the report. |
+| `Detalle` | One row per rubric item of each submission: requirement, profile, item, status, timestamps, evidence, what's missing and notes. Has filters. |
+| `Matriz` | Rubric items down, submissions across, the status in each cell, and how many items each submission meets. |
+
+Each report carries its data in a hidden JSON block, so the Excel is built
+from the HTML files themselves. Reports made before this feature are read
+from their visible content. If the Excel is open when it needs updating, the
+program asks you to close it and try again.
 
 ## 3. Rubric format
 
@@ -103,23 +129,20 @@ that way, it's changed to "Review".
 
 | Key | Purpose |
 |---|---|
-| `model` | Gemini model (default `gemini-3.8-flash`). `gemini-4-hydrogen` and `gemini-4-neon` are also included; they cost more. |
+| `model` | Default model when the program opens (`gemini-3.8-flash`). The others listed under `models` can be picked in the *Model* list. |
 | `models.<id>.prices_usd_per_million` | Prices per million tokens, with the date they take effect. Update them if Google changes its prices. |
 | `max_submissions`, `max_parallel` | Maximum submissions per session and in parallel (10). |
 | `min_recommended_height` | Minimum recommended resolution (720). |
-| `reports_dir` | Reports folder (empty = Documents\RubricVision AI\Reports). |
+
+Gemini 4 prices included (USD per million tokens, input / output): Hydrogen
+1.50 / 7.50; Argon and Carbon 2 / 10 until November 30, 2026 and 4 / 20 from
+December 1; Neon 3 / 15. The Gemini 4 models are assumed to count video tokens
+like Gemini 3 (280 per frame at high accuracy), so their estimates are
+approximate; "Cost so far" always uses the real token counts.
 
 The cost estimate uses: seconds of video × (280 tokens per frame at high
 accuracy or 70 at normal + 25 for audio) × input price, plus the answer. "Cost
 so far" uses the actual token counts returned by Gemini.
-
-Gemini 4 prices included (USD per million tokens, input / output): Hydrogen 1.50 / 7.50; 
-Argon and Carbon 2 / 10 until November 30, 2026 and 4 / 20 from December 1; Neon 3 / 15. 
-The Gemini 4 models are assumed to count video tokens like Gemini 3 (280 per frame at high accuracy), 
-so their estimates are approximate; "Cost so far" always uses the real token counts.
-
-The cost estimate uses: seconds of video × (280 tokens per frame at high accuracy or 70 at normal + 25 
-for audio) × input price, plus the answer. "Cost so far" uses the actual token counts returned by Gemini.
 
 ## 7. Troubleshooting
 
