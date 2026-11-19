@@ -39,10 +39,14 @@ RubricVision AI asks for the key **every time it starts** and **never saves it**
      videos can't be read).
    - Videos longer than the rubric's maximum length or below 720p are flagged,
      but they're still graded.
-4. **Accuracy:** *High* (recommended) reads small interface text more reliably.
-5. **Grade:** all submissions are processed in parallel. You can minimize the
+4. **Reports folder:** Choose folder… and pick where the reports will be saved.
+   Nothing is saved anywhere else, and Grade stays disabled until a folder is chosen.
+   The folder is kept for the rest of the session (also after New grading session),
+   but you choose it again each time you open the program.
+5. **Accuracy:** *High* (recommended) reads small interface text more reliably.
+6. **Grade:** all submissions are processed in parallel. You can minimize the
    window; don't close it until grading finishes.
-6. **Results:** *Open report* opens the report in the browser. If something
+7. **Results:** *Open report* opens the report in the browser. If something
    fails (video not public, no balance left, no connection), fix it and click
    *Retry*.
 
