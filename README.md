@@ -8,27 +8,6 @@ are written in Spanish.
 
 ---
 
-## 1. Build `RubricVisionAI.exe` (one time)
-
-1. Install **Python 3.11 or newer** from <https://www.python.org/downloads/>.
-   In the installer, check **"Add python.exe to PATH"**.
-2. Unzip this folder on your PC, for example to `C:\RubricVisionAI-src`.
-3. Double-click **`build.bat`**. The first run takes a few minutes: it creates
-   an isolated environment, installs the libraries and builds the executable.
-4. When it finishes, the **`dist`** folder contains:
-   - `RubricVisionAI.exe`: the program.
-   - `config.json`: model and prices (editable with Notepad).
-   - `plantilla_rubrica.xlsx`: rubric template.
-
-The `dist` folder is what you share with other teachers. They don't need to
-install Python.
-
-> If Windows Defender or SmartScreen says the program is unrecognized, that's
-> normal for new executables without a digital signature: "More info" →
-> "Run anyway".
-
-To try it without building the `.exe`, use `run_from_source.bat`.
-
 ### Automatic builds on GitHub
 
 `.github/workflows/build.yml` builds the `.exe` on every push to `master` (or
@@ -37,7 +16,7 @@ first, then uploads the `dist` folder as the artifact
 `RubricVisionAI-windows-<commit>` (kept for 30 days). If your main branch is
 `main`, change `branches: [master]` in that file.
 
-## 2. Before using it: the Gemini API key
+## 1. Before using it: the Gemini API key
 
 Each teacher uses their own key and pays only for what they grade:
 
@@ -49,7 +28,7 @@ Each teacher uses their own key and pays only for what they grade:
 
 RubricVision AI asks for the key **every time it starts** and **never saves it**.
 
-## 3. How to use it
+## 2. How to use it
 
 1. **API key:** paste it and click *Verify and continue* (this costs nothing).
 2. **Rubric:** *Load rubric…* and choose the Excel or YAML file.
@@ -67,10 +46,7 @@ RubricVision AI asks for the key **every time it starts** and **never saves it**
    fails (video not public, no balance left, no connection), fix it and click
    *Retry*.
 
-Reports are saved to `Documents\RubricVision AI\Reports\<date and time>\`: one
-`.html` per submission plus a `.json` with the model's full answer.
-
-## 4. Rubric format
+## 3. Rubric format
 
 The rubric content is written in Spanish (as in the course documents), so the
 sheet and column names below are in Spanish.
@@ -78,28 +54,20 @@ sheet and column names below are in Spanish.
 ### Excel (`.xlsx`)
 
 Sheet **`Rubrica`** with the columns **Requerimiento | Perfil | Item**
-(requirement, profile, item), one row per item (each bullet in the PDF). If a
+(requirement, profile, item), one row per item. If a
 Requerimiento or Perfil cell is empty, the value from the row above is used.
 
 Sheet **`Configuracion`**: `Duracion maxima | 15` (maximum video length in
 minutes; `15:00` is also accepted).
-
-The template (`plantilla_rubrica.xlsx`, or the *Download template* link in the
-program) already has this structure.
 
 ### YAML (`.yaml`)
 
 ```yaml
 duracion_maxima: "15:00"
 requerimientos:
-  - nombre: Registro, ingreso y cambio de contraseña
-    perfil: Usuario sin permisos; luego Administrador
-    items:
-      - registrar un usuario y validar DNI, nombre, apellido y formato y unicidad del correo
-      - mostrar que DNI y correo no pueden repetirse
 ```
 
-## 5. Item statuses
+## 4. Item statuses
 
 Shown in Spanish in the reports and in English in the results screen.
 
@@ -114,7 +82,7 @@ Shown in Spanish in the reports and in English in the results screen.
 The program never accepts "Meets" without evidence: if the model returns it
 that way, it's changed to "Review".
 
-## 6. Privacy and video deletion
+## 5. Privacy and video deletion
 
 - Local files are uploaded to Google only to be analyzed and are **deleted as
   soon as each grading finishes**, including when there was an error or it was
@@ -125,7 +93,7 @@ that way, it's changed to "Review".
 - On the paid tier, Google doesn't use the videos to train its models.
 - The original video on your PC is never modified.
 
-## 7. `config.json`
+## 6. `config.json`
 
 | Key | Purpose |
 |---|---|
@@ -139,7 +107,7 @@ The cost estimate uses: seconds of video × (280 tokens per frame at high
 accuracy or 70 at normal + 25 for audio) × input price, plus the answer. "Cost
 so far" uses the actual token counts returned by Gemini.
 
-## 8. Troubleshooting
+## 7. Troubleshooting
 
 - The error log is at `%LOCALAPPDATA%\RubricVision AI\rubricvision.log`
   (it never stores the API key).
