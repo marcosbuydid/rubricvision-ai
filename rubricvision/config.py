@@ -50,7 +50,6 @@ DEFAULT_CONFIG: dict = {
     "default_accuracy": "high",
     "min_recommended_height": 720,
     "youtube_assumed_minutes_without_rubric_limit": 15,
-    "reports_dir": "",
     "request_timeout_seconds": 900,
     "file_processing_timeout_seconds": 900,
     "leftover_upload_min_age_hours": 3,
@@ -123,12 +122,3 @@ class Config:
     # ----- other settings -----
     def get(self, key: str):
         return self.data.get(key, DEFAULT_CONFIG.get(key))
-
-    @property
-    def reports_dir(self) -> Path:
-        custom = self.get("reports_dir")
-        if custom:
-            return Path(custom)
-        docs = Path.home() / "Documents"
-        base = docs if docs.exists() else Path.home()
-        return base / "RubricVision AI" / "Reports"

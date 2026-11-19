@@ -7,10 +7,10 @@ import os
 import queue
 import subprocess
 import sys
+import tempfile
 import threading
 import tkinter as tk
 import webbrowser
-from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
@@ -76,6 +76,26 @@ def resource_path(name: str) -> Path:
 
 def shorten(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def shorten_path(path: Path, limit: int = 64) -> str:
+    text = str(path)
+    if len(text) <= limit:
+        return text
+    head = limit // 3
+    return text[:head] + "…" + text[-(limit - head - 1):]
+
+
+def folder_problem(folder: Path) -> str | None:
+    """None if reports can be written there, else the reason."""
+    if not folder.is_dir():
+        return "That folder doesn't exist anymore."
+    try:
+        with tempfile.NamedTemporaryFile(dir=folder, prefix=".rubricvision_", delete=True):
+            pass
+    except OSError as exc:
+        return f"Reports can't be saved in that folder ({exc.strerror or exc})."
+    return None
 
 
 def open_path(path: Path) -> None:
@@ -292,7 +312,7 @@ class App(tk.Tk):
         self.submissions: list[Submission] = []
         self.accuracy = config.get("default_accuracy") if config.get("default_accuracy") in ("normal", "high") else "high"
         self.session: GradingSession | None = None
-        self.session_dir: Path | None = None
+        self.reports_dir: Path | None = None  # chosen by the teacher; nothing is saved without it
         self.events: queue.Queue = queue.Queue()
         self.notice = ""
         self._closing = False
@@ -386,9 +406,7 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------ grading
     def start_grading(self):
-        assert self.service and self.rubric and self.submissions
-        stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.session_dir = self.cfg.reports_dir / stamp
+        assert self.service and self.rubric and self.submissions and self.reports_dir
         min_h = int(self.cfg.get("min_recommended_height"))
         self.session = GradingSession(
             self.service,
@@ -396,7 +414,7 @@ class App(tk.Tk):
             list(self.submissions),
             self.accuracy,
             self.cfg,
-            self.session_dir,
+            self.reports_dir,
             emit=lambda e: self.events.put(("grading", e)),
             report_writer=lambda result, out: write_report(result, out, min_h),
         )
@@ -625,9 +643,22 @@ class SubmissionsScreen(Screen):
         self.rubric_label = tk.Label(info, text="", bg=SURFACE, fg=TEXT, font=self.t.bold, anchor="w")
         self.rubric_label.pack(anchor="w")
 
+        # reports folder card
+        fcard = Box(body, bg=SURFACE)
+        fcard.pack(fill="x", pady=(self.px(8), 0))
+        finner = tk.Frame(fcard.inner, bg=SURFACE)
+        finner.pack(fill="x", padx=self.px(16), pady=self.px(10))
+        self.folder_btn = ttk.Button(finner, text="Choose folder…", style="SmallSecondary.TButton", command=self.choose_folder)
+        self.folder_btn.pack(side="right")
+        finfo = tk.Frame(finner, bg=SURFACE)
+        finfo.pack(side="left", fill="x", expand=True)
+        tk.Label(finfo, text="Save reports in", bg=SURFACE, fg=FAINT, font=self.t.small_bold, anchor="w").pack(anchor="w")
+        self.folder_label = tk.Label(finfo, text="", bg=SURFACE, fg=TEXT, font=self.t.bold, anchor="w")
+        self.folder_label.pack(anchor="w")
+
         # list header
         head = tk.Frame(body, bg=WHITE)
-        head.pack(fill="x", pady=(self.px(14), self.px(8)))
+        head.pack(fill="x", pady=(self.px(12), self.px(8)))
         self.count_label = tk.Label(head, text="", bg=WHITE, fg=TEXT, font=self.t.h2, anchor="w")
         self.count_label.pack(side="left")
         self.add_files_btn = ttk.Button(head, text="+ Add videos…", style="Outline.TButton", command=self.add_files)
@@ -635,7 +666,7 @@ class SubmissionsScreen(Screen):
         self.add_yt_btn = ttk.Button(head, text="Add YouTube link…", style="Outline.TButton", command=self.add_youtube)
         self.add_yt_btn.pack(side="right", padx=(0, self.px(8)))
 
-        self.list = ScrollList(body, self.t, self.COLUMNS, height=290)
+        self.list = ScrollList(body, self.t, self.COLUMNS, height=222)
         self.list.pack(fill="x")
 
         # accuracy + model
@@ -690,6 +721,24 @@ class SubmissionsScreen(Screen):
             return
         if messagebox.askyesno(APP_NAME, "Template saved. Open it now?", parent=self.app):
             open_path(Path(path))
+
+    def choose_folder(self):
+        current = self.app.reports_dir
+        path = filedialog.askdirectory(
+            parent=self.app,
+            title="Choose where to save the reports",
+            initialdir=str(current) if current else str(Path.home()),
+            mustexist=True,
+        )
+        if not path:
+            return
+        folder = Path(path)
+        problem = folder_problem(folder)
+        if problem:
+            messagebox.showerror(APP_NAME, problem, parent=self.app)
+            return
+        self.app.reports_dir = folder
+        self.refresh()
 
     def load_rubric(self):
         path = filedialog.askopenfilename(
@@ -767,6 +816,13 @@ class SubmissionsScreen(Screen):
         self.refresh()
 
     def grade(self):
+        folder = self.app.reports_dir
+        problem = folder_problem(folder) if folder else "Choose where to save the reports first."
+        if problem:
+            messagebox.showerror(APP_NAME, f"{problem}\nChoose another folder for the reports.", parent=self.app)
+            self.app.reports_dir = None
+            self.refresh()
+            return
         self.app.start_grading()
 
     # ------------------------------------------------------------ view
@@ -779,6 +835,13 @@ class SubmissionsScreen(Screen):
         else:
             self.rubric_label.configure(text="No rubric loaded yet (Excel or YAML)")
             self.rubric_btn.configure(text="Load rubric…")
+
+        if app.reports_dir:
+            self.folder_label.configure(text=shorten_path(app.reports_dir), fg=TEXT)
+            self.folder_btn.configure(text="Change…")
+        else:
+            self.folder_label.configure(text="No folder chosen yet", fg=TEXT)
+            self.folder_btn.configure(text="Choose folder…")
 
         n = len(app.submissions)
         self.count_label.configure(text=f"Submissions ({n} of {self.max_subs} max.)")
@@ -798,7 +861,7 @@ class SubmissionsScreen(Screen):
             kind = "▶ " if sub.is_youtube else ""
             name = tk.Frame(row, bg=bg)
             name.grid(row=0, column=0, sticky="w")
-            tk.Label(name, text=kind + shorten(sub.display_name, 32 if sub.is_youtube else 44), bg=bg, fg=TEXT, font=self.t.base).pack(side="left")
+            tk.Label(name, text=kind + shorten(sub.display_name, 28 if sub.is_youtube else 44), bg=bg, fg=TEXT, font=self.t.base).pack(side="left")
             if sub.is_youtube:
                 tk.Label(name, text="  · YouTube", bg=bg, fg=FAINT, font=self.t.small).pack(side="left")
                 tk.Label(row, text="Checked when graded", bg=bg, fg=FAINT, font=self.t.small).grid(row=0, column=1, sticky="w")
@@ -826,7 +889,7 @@ class SubmissionsScreen(Screen):
             remove.grid(row=0, column=4, sticky="e")
             remove.bind("<Button-1>", lambda _e, s=sub: self.remove(s))
 
-        ready = bool(r and n)
+        ready = bool(r and n and app.reports_dir)
         self.grade_btn.configure(
             text=f"Grade {n} submission{'s' if n != 1 else ''}" if n else "Grade",
             state="normal" if ready else "disabled",
@@ -848,6 +911,8 @@ class SubmissionsScreen(Screen):
                 notes.append(f"Time: {lo}–{hi} min (depends on your connection)")
             else:
                 notes.append("Time: a few minutes")
+            if not app.reports_dir:
+                notes.insert(0, "Choose where to save the reports to start")
             self.cost_note.configure(text="  ·  ".join(notes))
 
 
@@ -1139,7 +1204,7 @@ class ResultsScreen(Screen):
             messagebox.showerror(APP_NAME, "The report file wasn't found.", parent=self.app)
 
     def open_folder(self):
-        folder = self.app.session_dir
+        folder = self.app.reports_dir
         if folder and folder.exists():
             open_path(folder)
         else:

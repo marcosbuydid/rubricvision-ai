@@ -67,7 +67,7 @@ class Rubric:
             f"{self.item_count} item{'s' if self.item_count != 1 else ''}",
         ]
         if self.max_duration_s:
-            parts.append(f"max. {format_mmss(self.max_duration_s)} per video")
+            parts.append(f"max. {format_mmss(self.max_duration_s)}")
         return " · ".join(parts)
 
 
