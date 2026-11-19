@@ -1,4 +1,5 @@
 import datetime as dt
+import re
 import shutil
 import subprocess
 import threading
@@ -185,13 +186,13 @@ def test_report_escapes_and_links(tmp_path):
     sub = submission_from_youtube("https://youtu.be/1nsFdWVB_H0")
     res = normalize(RAW, sub, _rubric(), CONFIG, "high", Usage(1, 1))
     html = build_html(res)
-    assert "<script>" not in html and "&lt;script&gt;" in html
+    assert "<script>alert" not in html and "&lt;script&gt;" in html
     assert "watch?v=1nsFdWVB_H0&amp;t=151s" in html
     assert "supera el máximo de 15:00" in html
     assert "Legibilidad" in html
     p1 = write_report(res, tmp_path)
-    p2 = write_report(res, tmp_path)
-    assert p1 != p2 and p1.exists() and p2.exists()
+    p2 = write_report(res, tmp_path)  # same video graded again: replaced, not duplicated
+    assert p1 == p2 and p2.exists() and len(list(tmp_path.glob("*.html"))) == 1
 
 
 # ------------------------------------------------------------------ session with a fake Gemini
@@ -339,3 +340,118 @@ def test_model_switch_and_gemini4_prices():
     with pytest.raises(ValueError):
         cfg.set_model("gemini-9")
     assert DEFAULT_CONFIG["model"] == "gemini-3.8-flash"  # switching doesn't touch the defaults
+
+
+# ------------------------------------------------------------------ Excel summary
+from rubricvision import summary_excel as sx  # noqa: E402
+
+
+def _graded_report(tmp_path, name="group-1_demo.mp4"):
+    sub = Submission("file", f"/videos/{name}", name, duration_s=1000, width=854, height=480)
+    res = normalize(RAW, sub, _rubric(), CONFIG, "high", Usage(300000, 9000))
+    return res, write_report(res, tmp_path)
+
+
+def test_report_embeds_data_and_summary_reads_it(tmp_path):
+    res, path = _graded_report(tmp_path)
+    data = sx.load_report(path)
+    assert data["version"] == 1 and data["video"] == "group-1_demo.mp4"
+    assert data["low_resolution"] and data["over_limit"]
+    assert [i["status"] for i in data["items"]] == [r.status for r in res.items]
+    assert data["items"][1]["evidences"][0] == {"seconds": 125, "text": "<script>alert(1)</script> correo inexistente"}
+
+
+def test_legacy_report_without_data_block(tmp_path):
+    res, path = _graded_report(tmp_path)
+    html = path.read_text(encoding="utf-8")
+    legacy = re.sub(r'<script type="application/json" id="rubricvision-data">.*?</script>', "", html, flags=re.S)
+    path.write_text(legacy, encoding="utf-8")
+    data = sx.load_report(path)
+    assert data["version"] == 0
+    assert [i["status"] for i in data["items"]] == [r.status for r in res.items]
+    assert [e["seconds"] for e in data["items"][1]["evidences"]] == [125, 151]
+    assert data["items"][1]["missing"] == "No se muestra el usuario desactivado."
+    assert data["duration_s"] == 1000 and data["over_limit"] and data["low_resolution"]
+
+
+def test_write_summary_sheets(tmp_path):
+    _graded_report(tmp_path, "group-1_demo.mp4")
+    _graded_report(tmp_path, "group-2_demo.mp4")
+    (tmp_path / "otra_cosa.html").write_text("<html><body>no es un reporte</body></html>", encoding="utf-8")
+    out = sx.write_summary(tmp_path)
+    wb = openpyxl.load_workbook(out)
+    assert wb.sheetnames == ["Resumen", "Detalle", "Matriz"]
+    resumen = list(wb["Resumen"].iter_rows(values_only=True))
+    assert len(resumen) == 3 and resumen[1][0] == "group-1_demo.mp4"
+    assert resumen[1][13] == "=SUM(I2:M2)"
+    assert wb["Detalle"].max_row == 1 + 2 * 2
+    assert wb["Matriz"]["D1"].value == "group-1_demo.mp4"
+    assert sx.write_summary(tmp_path / "empty") is None if (tmp_path / "empty").mkdir() is None else True
+
+
+def test_summary_locked_by_excel(tmp_path, monkeypatch):
+    _graded_report(tmp_path)
+
+    def locked(*_a, **_k):
+        raise PermissionError("in use")
+
+    monkeypatch.setattr(sx.os, "replace", locked)
+    with pytest.raises(sx.SummaryError, match="open in Excel"):
+        sx.write_summary(tmp_path)
+    assert not list(tmp_path.glob(".resumen_*"))  # no temp files left behind
+
+
+def test_empty_summary_when_folder_is_chosen(tmp_path):
+    out = sx.write_empty_summary(tmp_path)
+    wb = openpyxl.load_workbook(out)
+    assert wb.sheetnames == ["Resumen", "Detalle", "Matriz"]
+    for ws in wb.worksheets:
+        assert ws.max_row == 1  # headers only
+    assert [c.value for c in wb["Matriz"][1]] == ["Requerimiento", "N°", "Ítem"]
+    assert sx.write_empty_summary(tmp_path) is None  # never overwrites
+    _graded_report(tmp_path)
+    full = openpyxl.load_workbook(sx.write_summary(tmp_path))
+    assert full["Resumen"].max_row == 2  # filled in after grading
+
+
+
+# ------------------------------------------------------------------ regrading replaces
+def test_regrading_replaces_html_and_json(tmp_path):
+    _, first = _graded_report(tmp_path, "group-1_demo.mp4")
+    first.with_suffix(".json").write_text("{}", encoding="utf-8")
+    _graded_report(tmp_path, "group-2_demo.mp4")
+    sub = Submission("file", "/otra/carpeta/group-1_demo.mp4", "group-1_demo.mp4", duration_s=600)
+    raw = dict(RAW, items=[dict(i, estado="no_se_muestra") for i in RAW["items"]])
+    new = write_report(normalize(raw, sub, _rubric(), CONFIG, "high", Usage(1, 1)), tmp_path)
+    assert new == first  # same name, new content
+    assert not first.with_suffix(".json").exists()  # the old .json went too
+    assert sorted(p.name for p in tmp_path.glob("*.html")) == ["group-1_demo.html", "group-2_demo.html"]
+    statuses = {i["status"] for i in sx.load_report(new)["items"]}
+    assert statuses == {"no_se_muestra"}
+    rows = list(openpyxl.load_workbook(sx.write_summary(tmp_path))["Resumen"].iter_rows(min_row=2, values_only=True))
+    assert len(rows) == 2  # one row per video in the Excel
+
+
+def test_youtube_identity_ignores_title_and_link_form(tmp_path):
+    a = submission_from_youtube("https://youtu.be/1nsFdWVB_H0")
+    a.display_name = "Demo Grupo 5"
+    write_report(normalize(RAW, a, _rubric(), CONFIG, "high", Usage(1, 1)), tmp_path)
+    b = submission_from_youtube("https://www.youtube.com/watch?v=1nsFdWVB_H0&t=3s")
+    b.display_name = "Demo Grupo 5 – título nuevo"
+    write_report(normalize(RAW, b, _rubric(), CONFIG, "high", Usage(1, 1)), tmp_path)
+    assert [p.name for p in tmp_path.glob("*.html")] == ["Demo_Grupo_5_titulo_nuevo.html"]
+
+
+def test_different_video_with_same_report_name_is_kept(tmp_path):
+    _graded_report(tmp_path, "group-1_demo.mp4")
+    _graded_report(tmp_path, "group-1 demo.mp4")  # different file, same safe name
+    assert sorted(p.name for p in tmp_path.glob("*.html")) == ["group-1_demo.html", "group-1_demo_2.html"]
+
+
+def test_older_report_without_data_block_is_replaced(tmp_path):
+    _, path = _graded_report(tmp_path, "group-1_demo.mp4")
+    html = path.read_text(encoding="utf-8")
+    path.write_text(re.sub(r'<script type="application/json".*?</script>', "", html, flags=re.S), encoding="utf-8")
+    _graded_report(tmp_path, "group-1_demo.mp4")
+    files = list(tmp_path.glob("*.html"))
+    assert len(files) == 1 and sx.load_report(files[0])["version"] == 1

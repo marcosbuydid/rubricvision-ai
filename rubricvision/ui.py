@@ -30,6 +30,7 @@ from .media import (
 from .pricing import estimate, estimate_minutes_range, format_usd
 from .prompt import STATUSES
 from .report import write_report
+from .summary_excel import SUMMARY_NAME, SummaryError, write_empty_summary, write_summary
 from .rubric import Rubric, RubricError, format_mmss
 from .rubric import load as load_rubric
 from .rubric import write_blank_template
@@ -342,6 +343,8 @@ class App(tk.Tk):
         self.reports_dir: Path | None = None  # chosen by the teacher; nothing is saved without it
         self.events: queue.Queue = queue.Queue()
         self.notice = ""
+        self.summary_notice = ""
+        self.summary_ready = False
         self._closing = False
 
         self.footer = tk.Frame(self, bg=FOOTER_BG, height=self.theme.px(28))
@@ -448,7 +451,43 @@ class App(tk.Tk):
         self.show_progress()
         self.session.start()
 
+    def update_summary(self, open_after: bool = False, quiet: bool = True):
+        """Rebuild the Excel summary from every report in the reports folder."""
+        folder = self.reports_dir
+        if not folder:
+            return
+
+        def done(path, error):
+            if isinstance(error, SummaryError):
+                if not quiet or open_after:
+                    messagebox.showwarning(APP_NAME, str(error), parent=self)
+                else:
+                    self.summary_notice = str(error)
+                    handler = getattr(self.screen, "on_summary", None)
+                    if handler:
+                        handler()
+                return
+            if error is not None:
+                log.error("Excel summary failed", exc_info=error)
+                if not quiet or open_after:
+                    messagebox.showerror(APP_NAME, f"Couldn't create the Excel summary:\n{error}", parent=self)
+                return
+            self.summary_notice = ""
+            self.summary_ready = bool(path)
+            handler = getattr(self.screen, "on_summary", None)
+            if handler:
+                handler()
+            if open_after:
+                if path:
+                    open_path(path)
+                else:
+                    messagebox.showinfo(APP_NAME, "There are no reports in the folder yet.", parent=self)
+
+        self.run_in_thread(lambda: write_summary(folder), done)
+
     def new_session(self):
+        self.summary_ready = False
+        self.summary_notice = ""
         if self.session:
             self.session.shutdown(wait=False)
         self.session = None
@@ -813,6 +852,8 @@ class SubmissionsScreen(Screen):
             messagebox.showerror(APP_NAME, problem, parent=self.app)
             return
         self.app.reports_dir = folder
+        # Empty summary (headers only) right away; it's filled in after each grading.
+        self.app.run_in_thread(lambda: write_empty_summary(folder), lambda *_: None)
         self.refresh()
 
     def load_rubric(self):
@@ -1172,6 +1213,9 @@ class ResultsScreen(Screen):
         ttk.Button(bar, text="Open reports folder", style="Secondary.TButton", command=self.open_folder).pack(
             side="left", pady=self.px(14)
         )
+        ttk.Button(bar, text="Excel summary", style="Secondary.TButton", command=self.open_summary).pack(
+            side="left", padx=(self.px(10), 0), pady=self.px(14)
+        )
         ttk.Button(bar, text="New grading session", style="Primary.TButton", command=self.new_session).pack(
             side="right", pady=self.px(14)
         )
@@ -1187,6 +1231,8 @@ class ResultsScreen(Screen):
         self.list = ScrollList(body, self.t, self.COLUMNS, height=120)
         self.list.pack(fill="both", expand=True, pady=(self.px(10), self.px(4)))
         self.render()
+        if self.session and self.session.results:
+            app.update_summary()
 
     def render(self):
         s = self.session
@@ -1202,10 +1248,14 @@ class ResultsScreen(Screen):
             parts.append(f"Total cost: {format_usd(s.total_cost)}")
         if any(not x.is_youtube for x in subs):
             parts.append("Uploaded videos deleted from Google")
+        if graded and self.app.summary_ready and not self.app.summary_notice:
+            parts.append("Excel summary updated")
         self.summary.configure(text=" · ".join(parts))
 
         for child in self.alert_holder.winfo_children():
             child.destroy()
+        if self.app.summary_notice:
+            self.notice_box(self.alert_holder, self.app.summary_notice, "warn").pack(fill="x", pady=(0, self.px(6)))
         kinds = {s.errors[u].kind for u in failed} if s else set()
         kinds.discard(GradingError.CANCELLED)
         if len(kinds) == 1:
@@ -1271,6 +1321,15 @@ class ResultsScreen(Screen):
     def on_grading_event(self, e: Event):
         if e.kind in ("done", "error", "cost", "finished"):
             self.render()
+        if e.kind == "finished":
+            self.app.update_summary()  # retries finished: refresh the Excel too
+
+    def on_summary(self):
+        if self.winfo_exists():
+            self.render()
+
+    def open_summary(self):
+        self.app.update_summary(open_after=True, quiet=False)
 
     def open_report(self, result: SubmissionResult):
         if result.report_path and result.report_path.exists():
