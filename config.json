@@ -1,0 +1,64 @@
+{
+  "model": "gemini-3.8-flash",
+  "models": {
+    "gemini-3.8-flash": {
+      "label": "Gemini 3.8 Flash",
+      "prices_usd_per_million": [
+        {
+          "from": "2026-01-01",
+          "input": 0.75,
+          "output": 3.75
+        },
+        {
+          "from": "2027-01-01",
+          "input": 1.5,
+          "output": 7.5
+        }
+      ],
+      "video_tokens_per_frame": {
+        "normal": 70,
+        "high": 280
+      },
+      "audio_tokens_per_second": 25
+    },
+    "gemini-4-hydrogen": {
+      "label": "Gemini 4 Hydrogen",
+      "prices_usd_per_million": [
+        {
+          "from": "2026-01-01",
+          "input": 1.5,
+          "output": 7.5
+        }
+      ],
+      "video_tokens_per_frame": {
+        "normal": 70,
+        "high": 280
+      },
+      "audio_tokens_per_second": 25
+    },
+    "gemini-4-neon": {
+      "label": "Gemini 4 Neon",
+      "prices_usd_per_million": [
+        {
+          "from": "2026-01-01",
+          "input": 3.0,
+          "output": 15.0
+        }
+      ],
+      "video_tokens_per_frame": {
+        "normal": 70,
+        "high": 280
+      },
+      "audio_tokens_per_second": 25
+    }
+  },
+  "max_submissions": 10,
+  "max_parallel": 10,
+  "default_accuracy": "high",
+  "min_recommended_height": 720,
+  "youtube_assumed_minutes_without_rubric_limit": 15,
+  "reports_dir": "",
+  "request_timeout_seconds": 900,
+  "file_processing_timeout_seconds": 900,
+  "leftover_upload_min_age_hours": 3
+}
