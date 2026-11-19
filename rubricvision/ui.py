@@ -175,6 +175,23 @@ class Theme:
         style.map("TEntry", bordercolor=[("focus", BLUE)], lightcolor=[("focus", BLUE)])
         style.configure("Error.TEntry", bordercolor=RED, lightcolor=RED, darkcolor=RED)
         style.configure(
+            "TCombobox",
+            fieldbackground=WHITE,
+            background=WHITE,
+            bordercolor=BORDER_STRONG,
+            lightcolor=WHITE,
+            darkcolor=WHITE,
+            arrowcolor=TEXT,
+            padding=(self.px(8), self.px(4)),
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", WHITE)],
+            selectbackground=[("readonly", WHITE)],
+            selectforeground=[("readonly", TEXT)],
+            bordercolor=[("focus", BLUE)],
+        )
+        style.configure(
             "Blue.Horizontal.TProgressbar",
             troughcolor="#E3E7ED",
             background=BLUE,
@@ -692,7 +709,20 @@ class SubmissionsScreen(Screen):
         model = tk.Frame(opts, bg=WHITE)
         model.pack(side="right")
         tk.Label(model, text="Model", bg=WHITE, fg=FAINT, font=self.t.small_bold).pack(anchor="e")
-        tk.Label(model, text=app.cfg.model_label, bg=WHITE, fg=TEXT, font=self.t.base).pack(anchor="e")
+        self.models = app.cfg.available_models()
+        self.model_var = tk.StringVar(value=app.cfg.model_label)
+        self.model_box = ttk.Combobox(
+            model,
+            textvariable=self.model_var,
+            values=[label for _id, label in self.models],
+            state="readonly",
+            width=18,
+            font=self.t.base,
+        )
+        self.model_box.pack(anchor="e", pady=(self.px(3), 0))
+        self.model_box.bind("<<ComboboxSelected>>", self.on_model_selected)
+        self.model_note = tk.Label(model, text="", bg=WHITE, fg=AMBER, font=self.t.tiny)
+        self.model_note.pack(anchor="e")
 
         self.refresh()
         if app.notice:
@@ -700,6 +730,28 @@ class SubmissionsScreen(Screen):
             app.notice = ""
 
     # ------------------------------------------------------------ actions
+    def on_model_selected(self, _event=None):
+        label = self.model_var.get()
+        model_id = next(mid for mid, lbl in self.models if lbl == label)
+        self.app.cfg.set_model(model_id)
+        self.model_box.selection_clear()
+        self.model_note.configure(text="Checking availability…", fg=FAINT)
+        self.refresh()
+        service = self.app.service
+
+        def work():
+            return service.check_model() if service else True
+
+        def done(ok, _err):
+            if not self.winfo_exists() or self.app.cfg.model_id != model_id:
+                return
+            if ok:
+                self.model_note.configure(text="")
+            else:
+                self.model_note.configure(text="Not available for this API key", fg=AMBER)
+
+        self.app.run_in_thread(work, done)
+
     def set_accuracy(self, value: str):
         self.app.accuracy = value
         self.refresh()

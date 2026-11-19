@@ -36,6 +36,46 @@
       },
       "audio_tokens_per_second": 25
     },
+    "gemini-4-argon": {
+      "label": "Gemini 4 Argon",
+      "prices_usd_per_million": [
+        {
+          "from": "2026-01-01",
+          "input": 2.0,
+          "output": 10.0
+        },
+        {
+          "from": "2026-12-01",
+          "input": 4.0,
+          "output": 20.0
+        }
+      ],
+      "video_tokens_per_frame": {
+        "normal": 70,
+        "high": 280
+      },
+      "audio_tokens_per_second": 25
+    },
+    "gemini-4-carbon": {
+      "label": "Gemini 4 Carbon",
+      "prices_usd_per_million": [
+        {
+          "from": "2026-01-01",
+          "input": 2.0,
+          "output": 10.0
+        },
+        {
+          "from": "2026-12-01",
+          "input": 4.0,
+          "output": 20.0
+        }
+      ],
+      "video_tokens_per_frame": {
+        "normal": 70,
+        "high": 280
+      },
+      "audio_tokens_per_second": 25
+    },
     "gemini-4-neon": {
       "label": "Gemini 4 Neon",
       "prices_usd_per_million": [
