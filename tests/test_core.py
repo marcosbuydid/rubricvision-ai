@@ -23,7 +23,19 @@ CONFIG = Config(DEFAULT_CONFIG)
 # ------------------------------------------------------------------ rubric
 def test_template_roundtrip(tmp_path):
     path = tmp_path / "plantilla.xlsx"
-    rb.write_template(path)
+    rb.write_blank_template(path)
+    wb = openpyxl.load_workbook(path)
+    ws = wb["Rubrica"]
+    for row in [
+        ("Registro e ingreso", "Usuario sin permisos", "Registrar un usuario"),
+        (None, None, "Mostrar que el correo no puede repetirse"),
+        (None, None, "Probar ingreso con correo inexistente"),
+        ("Gestión de catálogos", "Administrador", "Crear un catálogo"),
+        (None, None, "Modificar los datos del catálogo"),
+    ]:
+        ws.append(row)
+    wb.create_sheet("Configuracion").append(["Duracion maxima", 15])
+    wb.save(path)
     r = rb.load(path)
     assert [q.name for q in r.requirements] == ["Registro e ingreso", "Gestión de catálogos"]
     assert r.item_count == 5
@@ -299,3 +311,14 @@ def test_progress_file_reports_and_cancels(tmp_path):
         cancel.set()
         with pytest.raises(GradingError):
             fh.read(100)
+
+
+def test_blank_template_has_only_headers(tmp_path):
+    p = tmp_path / "plantilla.xlsx"
+    rb.write_blank_template(p)
+    wb = openpyxl.load_workbook(p)
+    assert wb.sheetnames == ["Rubrica"]
+    rows = list(wb["Rubrica"].iter_rows(values_only=True))
+    assert rows == [("Requerimiento", "Perfil", "Item")]
+    with pytest.raises(rb.RubricError, match="no items"):
+        rb.load(p)  # a blank template can't be used until it's filled in

@@ -259,54 +259,21 @@ def load(path: str | Path) -> Rubric:
 
 
 # ---------------------------------------------------------------- template
-def write_template(path: str | Path) -> None:
-    """Excel template with the expected sheets and two example requirements."""
+def write_blank_template(path: str | Path) -> None:
+    """Rubric template with only the column names (shipped with the .exe and
+    saved by the "Download template" link)."""
     import openpyxl
-    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.styles import Font, PatternFill
 
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Rubrica"
     ws.append(["Requerimiento", "Perfil", "Item"])
-    examples = [
-        ("Registro e ingreso", "Usuario sin permisos", "Registrar un usuario y validar nombre, apellido y formato del correo"),
-        ("", "", "Mostrar que el correo no puede repetirse"),
-        ("", "", "Probar ingreso con correo inexistente, contraseña incorrecta y usuario desactivado"),
-        ("Gestión de catálogos", "Administrador", "Crear un catálogo y validar que el nombre tenga entre 3 y 80 caracteres"),
-        ("", "", "Modificar los datos del catálogo"),
-    ]
-    for row in examples:
-        ws.append(row)
-    header_fill = PatternFill("solid", fgColor="0B5CAD")
     for cell in ws[1]:
         cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = header_fill
+        cell.fill = PatternFill("solid", fgColor="0B5CAD")
     ws.column_dimensions["A"].width = 34
     ws.column_dimensions["B"].width = 30
     ws.column_dimensions["C"].width = 90
-    for row in ws.iter_rows(min_row=2):
-        for cell in row:
-            cell.alignment = Alignment(wrap_text=True, vertical="top")
     ws.freeze_panes = "A2"
-
-    cfg = wb.create_sheet("Configuracion")
-    cfg.append(["Duracion maxima", 15])
-    cfg.append(["(minutos; también se acepta 15:00 como texto)"])
-    cfg["A1"].font = Font(bold=True)
-    cfg["A2"].font = Font(italic=True, color="5C6370")
-    cfg.column_dimensions["A"].width = 44
-
-    help_ws = wb.create_sheet("Ayuda")
-    lines = [
-        "Cómo completar esta rúbrica para RubricVision AI",
-        "",
-        "• Una fila por cada ítem a mostrar y validar (cada viñeta del PDF).",
-        "• Si la celda Requerimiento o Perfil queda vacía, se usa la de la fila de arriba.",
-        "• La duración máxima va en la hoja Configuracion, en minutos.",
-        "• No cambies los nombres de las hojas ni de las columnas.",
-    ]
-    for line in lines:
-        help_ws.append([line])
-    help_ws["A1"].font = Font(bold=True, size=13)
-    help_ws.column_dimensions["A"].width = 90
     wb.save(path)
