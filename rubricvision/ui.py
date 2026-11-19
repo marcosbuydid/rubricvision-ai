@@ -32,7 +32,7 @@ from .prompt import STATUSES
 from .report import write_report
 from .rubric import Rubric, RubricError, format_mmss
 from .rubric import load as load_rubric
-from .rubric import write_template
+from .rubric import write_blank_template
 
 log = logging.getLogger(__name__)
 
@@ -627,7 +627,7 @@ class SubmissionsScreen(Screen):
         self.grade_btn.pack(side="right", pady=self.px(14))
 
         body = tk.Frame(self, bg=WHITE)
-        body.pack(fill="both", expand=True, padx=self.px(28), pady=(self.px(18), self.px(12)))
+        body.pack(fill="both", expand=True, padx=self.px(28), pady=(self.px(18), self.px(16)))
 
         # rubric card
         card = Box(body, bg=SURFACE)
@@ -666,12 +666,12 @@ class SubmissionsScreen(Screen):
         self.add_yt_btn = ttk.Button(head, text="Add YouTube link…", style="Outline.TButton", command=self.add_youtube)
         self.add_yt_btn.pack(side="right", padx=(0, self.px(8)))
 
-        self.list = ScrollList(body, self.t, self.COLUMNS, height=222)
-        self.list.pack(fill="x")
+        self.list = ScrollList(body, self.t, self.COLUMNS, height=120)
 
         # accuracy + model
         opts = tk.Frame(body, bg=WHITE)
-        opts.pack(fill="x", pady=(self.px(14), 0))
+        opts.pack(side="bottom", fill="x", pady=(self.px(14), self.px(4)))
+        self.list.pack(fill="both", expand=True)  # after opts, so opts always keeps its height
         acc = tk.Frame(opts, bg=WHITE)
         acc.pack(side="left")
         tk.Label(acc, text="Accuracy", bg=WHITE, fg=FAINT, font=self.t.small_bold).pack(anchor="w")
@@ -715,7 +715,7 @@ class SubmissionsScreen(Screen):
         if not path:
             return
         try:
-            write_template(path)
+            write_blank_template(path)
         except OSError as exc:
             messagebox.showerror(APP_NAME, f"Couldn't save the template:\n{exc}", parent=self.app)
             return
@@ -1000,7 +1000,7 @@ class ProgressScreen(Screen):
         self.cancel_btn.pack(side="right", pady=self.px(14))
 
         body = tk.Frame(self, bg=WHITE)
-        body.pack(fill="both", expand=True, padx=self.px(28), pady=(self.px(18), self.px(12)))
+        body.pack(fill="both", expand=True, padx=self.px(28), pady=(self.px(18), self.px(16)))
         top = tk.Frame(body, bg=WHITE)
         top.pack(fill="x")
         tk.Label(
@@ -1021,8 +1021,12 @@ class ProgressScreen(Screen):
             anchor="w",
         ).pack(fill="x")
 
-        self.list = ScrollList(body, self.t, self.COLUMNS, height=280)
-        self.list.pack(fill="x", pady=(self.px(14), self.px(12)))
+        self.notice_box(
+            body,
+            "You can minimize this window and keep using your PC. Don't close RubricVision AI until grading finishes.",
+        ).pack(side="bottom", fill="x", pady=(self.px(12), self.px(4)))
+        self.list = ScrollList(body, self.t, self.COLUMNS, height=120)
+        self.list.pack(fill="both", expand=True, pady=(self.px(14), 0))
         self.list.clear()
         for sub in app.submissions:
             row = self.list.add_row(height=42)
@@ -1037,10 +1041,6 @@ class ProgressScreen(Screen):
             bar_widget = ttk.Progressbar(detail, style="Thin.Horizontal.TProgressbar", maximum=1.0)
             self.rows[sub.uid] = {"status": status, "label": label, "bar": bar_widget}
 
-        self.notice_box(
-            body,
-            "You can minimize this window and keep using your PC. Don't close RubricVision AI until grading finishes.",
-        ).pack(fill="x")
         self._update_counts()
 
     def _update_counts(self):
@@ -1102,15 +1102,15 @@ class ResultsScreen(Screen):
         )
 
         body = tk.Frame(self, bg=WHITE)
-        body.pack(fill="both", expand=True, padx=self.px(28), pady=(self.px(18), self.px(12)))
+        body.pack(fill="both", expand=True, padx=self.px(28), pady=(self.px(18), self.px(16)))
         self.title_label = tk.Label(body, text="", bg=WHITE, fg=TEXT, font=self.t.h1, anchor="w")
         self.title_label.pack(fill="x")
         self.summary = tk.Label(body, text="", bg=WHITE, fg=MUTED, font=self.t.base, anchor="w")
         self.summary.pack(fill="x", pady=(self.px(2), self.px(10)))
         self.alert_holder = tk.Frame(body, bg=WHITE)
         self.alert_holder.pack(fill="x")
-        self.list = ScrollList(body, self.t, self.COLUMNS, height=300)
-        self.list.pack(fill="x", pady=(self.px(10), 0))
+        self.list = ScrollList(body, self.t, self.COLUMNS, height=120)
+        self.list.pack(fill="both", expand=True, pady=(self.px(10), self.px(4)))
         self.render()
 
     def render(self):
