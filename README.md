@@ -86,6 +86,7 @@ Shown in Spanish in the reports and in English in the results screen.
 The program never accepts "Meets" without evidence: if the model returns it
 that way, it's changed to "Review".
 
+
 ## 5. Privacy and video deletion
 
 - Local files are uploaded to Google only to be analyzed and are **deleted as
@@ -96,6 +97,7 @@ that way, it's changed to "Review".
 - YouTube links upload nothing: Gemini reads the video directly.
 - On the paid tier, Google doesn't use the videos to train its models.
 - The original video on your PC is never modified.
+
 
 ## 6. `config.json`
 
@@ -110,6 +112,14 @@ that way, it's changed to "Review".
 The cost estimate uses: seconds of video × (280 tokens per frame at high
 accuracy or 70 at normal + 25 for audio) × input price, plus the answer. "Cost
 so far" uses the actual token counts returned by Gemini.
+
+Gemini 4 prices included (USD per million tokens, input / output): Hydrogen 1.50 / 7.50; 
+Argon and Carbon 2 / 10 until November 30, 2026 and 4 / 20 from December 1; Neon 3 / 15. 
+The Gemini 4 models are assumed to count video tokens like Gemini 3 (280 per frame at high accuracy), 
+so their estimates are approximate; "Cost so far" always uses the real token counts.
+
+The cost estimate uses: seconds of video × (280 tokens per frame at high accuracy or 70 at normal + 25 
+for audio) × input price, plus the answer. "Cost so far" uses the actual token counts returned by Gemini.
 
 ## 7. Troubleshooting
 
