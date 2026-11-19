@@ -44,8 +44,9 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item config.json dist/
-          Copy-Item plantilla_rubrica.xlsx dist/
           Copy-Item README.md dist/
+          # The template is generated from the code, so it doesn't need to be in the repo.
+          python -c "from rubricvision.rubric import write_template; write_template('dist/plantilla_rubrica.xlsx')"
           "SHORT_SHA=$(git rev-parse --short HEAD)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Check the executable exists
