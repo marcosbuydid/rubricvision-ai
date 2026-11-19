@@ -322,3 +322,20 @@ def test_blank_template_has_only_headers(tmp_path):
     assert rows == [("Requerimiento", "Perfil", "Item")]
     with pytest.raises(rb.RubricError, match="no items"):
         rb.load(p)  # a blank template can't be used until it's filled in
+
+
+def test_model_switch_and_gemini4_prices():
+    import copy
+
+    cfg = Config(copy.deepcopy(DEFAULT_CONFIG))
+    ids = [mid for mid, _ in cfg.available_models()]
+    assert ids[:4] == ["gemini-3.8-flash", "gemini-4-hydrogen", "gemini-4-argon", "gemini-4-carbon"]
+    cfg.set_model("gemini-4-carbon")
+    assert cfg.model_label == "Gemini 4 Carbon"
+    assert cfg.prices(dt.date(2026, 11, 30)) == (2.0, 10.0)
+    assert cfg.prices(dt.date(2026, 12, 1)) == (4.0, 20.0)
+    cfg.set_model("gemini-4-hydrogen")
+    assert cfg.prices(dt.date(2026, 12, 1)) == (1.5, 7.5)
+    with pytest.raises(ValueError):
+        cfg.set_model("gemini-9")
+    assert DEFAULT_CONFIG["model"] == "gemini-3.8-flash"  # switching doesn't touch the defaults

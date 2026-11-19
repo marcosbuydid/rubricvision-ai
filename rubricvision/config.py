@@ -36,6 +36,24 @@ DEFAULT_CONFIG: dict = {
             "video_tokens_per_frame": {"normal": 70, "high": 280},
             "audio_tokens_per_second": 25,
         },
+        "gemini-4-argon": {
+            "label": "Gemini 4 Argon",
+            "prices_usd_per_million": [
+                {"from": "2026-01-01", "input": 2.00, "output": 10.00},
+                {"from": "2026-12-01", "input": 4.00, "output": 20.00},
+            ],
+            "video_tokens_per_frame": {"normal": 70, "high": 280},
+            "audio_tokens_per_second": 25,
+        },
+        "gemini-4-carbon": {
+            "label": "Gemini 4 Carbon",
+            "prices_usd_per_million": [
+                {"from": "2026-01-01", "input": 2.00, "output": 10.00},
+                {"from": "2026-12-01", "input": 4.00, "output": 20.00},
+            ],
+            "video_tokens_per_frame": {"normal": 70, "high": 280},
+            "audio_tokens_per_second": 25,
+        },
         "gemini-4-neon": {
             "label": "Gemini 4 Neon",
             "prices_usd_per_million": [
@@ -104,6 +122,16 @@ class Config:
         if self.model_id not in models:
             raise ValueError(f"Model '{self.model_id}' is not described in config.json")
         return models[self.model_id]
+
+    def available_models(self) -> list[tuple[str, str]]:
+        """(id, label) for every model described in the config, in order."""
+        return [(mid, m.get("label", mid)) for mid, m in self.data["models"].items()]
+
+    def set_model(self, model_id: str) -> None:
+        """Switch model for this session only (config.json isn't modified)."""
+        if model_id not in self.data["models"]:
+            raise ValueError(f"Unknown model '{model_id}'")
+        self.data["model"] = model_id
 
     @property
     def model_label(self) -> str:
